@@ -2,42 +2,33 @@
   "name": "Autonomous Executive Inbox & Action Hub",
   "nodes": [
     {
-      "parameters": {},
+      "parameters": {
+        "postProcessAction": "nothing",
+        "options": {}
+      },
       "id": "1",
+      "name": "Email Trigger (IMAP)",
+      "type": "n8n-nodes-base.emailReadImap",
+      "typeVersion": 2.2,
+      "position": [
+        220,
+        220
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "2",
       "name": "Manual Test Trigger",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
       "position": [
         220,
-        240
+        400
       ]
     },
     {
       "parameters": {
-        "pollTimes": {
-          "item": [
-            {
-              "mode": "everyMinute"
-            }
-          ]
-        },
-        "filters": {
-          "q": "is:unread -category:promotions -category:social"
-        }
-      },
-      "id": "2",
-      "name": "Gmail Trigger (New Unread Email)",
-      "type": "n8n-nodes-base.gmailTrigger",
-      "typeVersion": 1,
-      "disabled": true,
-      "position": [
-        220,
-        420
-      ]
-    },
-    {
-      "parameters": {
-        "jsCode": "// Normalizes incoming email payload from either Gmail Trigger or Manual Test\nconst item = $input.first().json;\n\n// Sample fallback data if testing manually\nconst from = item.from || item.sender || \"John Doe <john.doe@clientcorp.io>\";\nconst subject = item.subject || \"Urgent: Project Scope Update & Next Steps\";\nconst threadId = item.threadId || item.id || \"thread_sample_12345\";\nlet snippet = item.snippet || item.text || item.body || \"Hi, we loved the automation demo you shared. We would like to expand the scope to include automated invoice reconciliation. Could you let us know your availability for a call this Thursday at 2 PM UTC to finalize the contract?\";\n\n// Clean and truncate body if needed (protect token budget)\nconst cleanBody = snippet.replace(/<[^>]*>?/gm, '').slice(0, 3000);\n\nreturn [{\n  json: {\n    from,\n    subject,\n    threadId,\n    body: cleanBody,\n    receivedAt: item.date || new Date().toISOString()\n  }\n}];"
+        "jsCode": "// Normalizes incoming email payload from either Gmail Trigger or Manual Test\nconst item = $input.first().json;\n\n// Sample fallback data if testing manually\nconst from = item.from || item.sender || \"John Doe <john.doe@clientcorp.io>\";\nconst subject = item.subject || \"Urgent: Project Scope Update & Next Steps\";\nconst threadId = item.threadId || item.id || \"thread_sample_12345\";\nlet snippet = item.snippet || item.text || item.body || \"Hi, we loved the automation demo you shared. We would like to expand the scope to include automated invoice reconciliation. Could you let us know your availability for a call this Thursday at 2 PM UTC to finalize the contract?\";\n\n// Clean and truncate body if needed (protect token budget)\nconst cleanBody = String(snippet).replace(/<[^>]*>?/gm, '').slice(0, 3000);\n\nreturn [{\n  json: {\n    from,\n    subject,\n    threadId,\n    body: cleanBody,\n    receivedAt: item.date || new Date().toISOString()\n  }\n}];"
       },
       "id": "3",
       "name": "Pre-process & Sanitize Email",
@@ -45,7 +36,7 @@
       "typeVersion": 2,
       "position": [
         460,
-        340
+        300
       ]
     },
     {
@@ -76,12 +67,12 @@
       "typeVersion": 4.2,
       "position": [
         700,
-        340
+        300
       ]
     },
     {
       "parameters": {
-        "jsCode": "const response = $input.first().json;\nconst emailMeta = $(\"Pre-process & Sanitize Email\").first().json;\n\nlet aiOutput = {};\ntry {\n  const content = response.choices[0].message.content;\n  aiOutput = typeof content === 'string' ? JSON.parse(content) : content;\n} catch (err) {\n  aiOutput = {\n    category: 'Urgent Inquiry',\n    urgency_score: 3,\n    summary: 'Could not parse JSON response from AI Gateway.',\n    action_needed: 'Check email manually.',\n    draft_reply: 'Hi, thank you for reaching out. I received your message and will get back to you shortly.'\n  };\n}\n\n// Determine emoji badge based on urgency\nconst urgencyBadge = '⚡'.repeat(Math.min(aiOutput.urgency_score || 1, 5));\n\n// Format telegram markdown message\nconst telegramText = `📬 *New Inbound Email Analyzed*\\n` +\n`*From:* \\`${emailMeta.from}\\`\\n` +\n`*Subject:* *${emailMeta.subject}*\\n` +\n`*Category:* ${aiOutput.category} (${urgencyBadge})\\n\\n` +\n`📋 *Executive Summary:*\\n${aiOutput.summary}\\n\\n` +\n`🎯 *Action Needed:*\\n${aiOutput.action_needed}\\n\\n` +\n`✍️ *Suggested Draft Reply:*\\n\\\"_${aiOutput.draft_reply}_\\\"`;\n\nreturn [{\n  json: {\n    ...emailMeta,\n    ai: aiOutput,\n    telegramText,\n    sendCallback: `send:${emailMeta.threadId.slice(0, 40)}`,\n    archiveCallback: `arch:${emailMeta.threadId.slice(0, 40)}`\n  }\n}];"
+        "jsCode": "const response = $input.first().json;\nconst emailMeta = $(\"Pre-process & Sanitize Email\").first().json;\n\nlet aiOutput = {};\ntry {\n  const content = response.choices[0].message.content;\n  aiOutput = typeof content === 'string' ? JSON.parse(content) : content;\n} catch (err) {\n  aiOutput = {\n    category: 'Urgent Inquiry',\n    urgency_score: 3,\n    summary: 'Could not parse JSON response from AI Gateway.',\n    action_needed: 'Check email manually.',\n    draft_reply: 'Hi, thank you for reaching out. I received your message and will get back to you shortly.'\n  };\n}\n\n// Determine emoji badge based on urgency\nconst urgencyBadge = '⚡'.repeat(Math.min(aiOutput.urgency_score || 1, 5));\n\n// Format telegram markdown message\nconst telegramText = `📬 *New Inbound Email Analyzed*\\n` +\n`*From:* \\`${emailMeta.from}\\`\\n` +\n`*Subject:* *${emailMeta.subject}*\\n` +\n`*Category:* ${aiOutput.category} (${urgencyBadge})\\n\\n` +\n`📋 *Executive Summary:*\\n${aiOutput.summary}\\n\\n` +\n`🎯 *Action Needed:*\\n${aiOutput.action_needed}\\n\\n` +\n`✍️ *Suggested Draft Reply:*\\n\\\"_${aiOutput.draft_reply}_\\\"`;\n\nreturn [{\n  json: {\n    ...emailMeta,\n    ai: aiOutput,\n    telegramText,\n    sendCallback: `send:${emailMeta.threadId.slice(0, 40)}`\n  }\n}];"
       },
       "id": "5",
       "name": "Format Telegram Notification",
@@ -89,7 +80,7 @@
       "typeVersion": 2,
       "position": [
         940,
-        340
+        300
       ]
     },
     {
@@ -107,12 +98,6 @@
                     "additionalFields": {
                       "callback_data": "={{ $json.sendCallback }}"
                     }
-                  },
-                  {
-                    "text": "📁 Archive",
-                    "additionalFields": {
-                      "callback_data": "={{ $json.archiveCallback }}"
-                    }
                   }
                 ]
               }
@@ -129,7 +114,7 @@
       "typeVersion": 1.2,
       "position": [
         1180,
-        340
+        300
       ]
     },
     {
@@ -138,117 +123,64 @@
           "callback_query"
         ]
       },
-      "id": "101",
+      "id": "7",
       "name": "Telegram Callback Trigger",
       "type": "n8n-nodes-base.telegramTrigger",
       "typeVersion": 1.1,
       "position": [
         220,
-        640
+        600
       ]
     },
     {
       "parameters": {
-        "jsCode": "const query = $input.first().json.callback_query;\nconst data = query.data || '';\nconst parts = data.split(':');\nconst action = parts[0];\nconst threadId = parts.slice(1).join(':');\nconst messageId = query.message.message_id;\nconst chatId = query.message.chat.id;\nconst queryId = query.id;\n\nreturn [{\n  json: {\n    action,\n    threadId,\n    messageId,\n    chatId,\n    queryId,\n    originalText: query.message.text,\n    timestamp: new Date().toLocaleTimeString()\n  }\n}];"
+        "jsCode": "const query = $input.first().json.callback_query;\nconst originalText = query.message.text || '';\nconst messageId = query.message.message_id;\nconst chatId = query.message.chat.id;\n\n// 1. Extract recipient email\nconst fromMatch = originalText.match(/From:\\s*([^\\n\\r]+)/i);\nconst rawFrom = fromMatch ? fromMatch[1].trim() : '';\nconst emailBracket = rawFrom.match(/<([^>]+)>/);\nconst toEmail = emailBracket ? emailBracket[1].trim() : rawFrom.replace(/`/g, '').trim();\n\n// 2. Extract original subject\nconst subjMatch = originalText.match(/Subject:\\s*([^\\n\\r]+)/i);\nlet subject = subjMatch ? subjMatch[1].replace(/\\*/g, '').trim() : 'Project Inquiry';\nconst replySubject = subject.toLowerCase().startsWith('re:') ? subject : `Re: ${subject}`;\n\n// 3. Extract the drafted reply text\nlet draftReply = '';\nconst draftMarker = 'Suggested Draft Reply:';\nconst draftIndex = originalText.indexOf(draftMarker);\nif (draftIndex !== -1) {\n  let raw = originalText.slice(draftIndex + draftMarker.length).trim();\n  if (raw.startsWith('\"') || raw.startsWith('“')) raw = raw.slice(1);\n  const lastQuote = Math.max(raw.lastIndexOf('\"'), raw.lastIndexOf('”'));\n  if (lastQuote !== -1) raw = raw.slice(0, lastQuote);\n  draftReply = raw.trim();\n}\n\nreturn [{\n  json: {\n    toEmail,\n    replySubject,\n    draftReply,\n    originalText,\n    messageId,\n    chatId,\n    timestamp: new Date().toLocaleTimeString()\n  }\n}];"
       },
-      "id": "102",
-      "name": "Parse Callback Action",
+      "id": "8",
+      "name": "Parse Callback & Extract Draft",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        460,
-        640
+        480,
+        600
       ]
     },
     {
       "parameters": {
-        "rules": {
-          "values": [
-            {
-              "conditions": {
-                "options": {
-                  "caseSensitive": true,
-                  "leftValue": "",
-                  "typeValidation": "strict"
-                },
-                "conditions": [
-                  {
-                    "leftValue": "={{ $json.action }}",
-                    "rightValue": "send",
-                    "operator": {
-                      "type": "string",
-                      "operation": "equals"
-                    }
-                  }
-                ],
-                "combinator": "and"
-              }
-            },
-            {
-              "conditions": {
-                "options": {
-                  "caseSensitive": true,
-                  "leftValue": "",
-                  "typeValidation": "strict"
-                },
-                "conditions": [
-                  {
-                    "leftValue": "={{ $json.action }}",
-                    "rightValue": "arch",
-                    "operator": {
-                      "type": "string",
-                      "operation": "equals"
-                    }
-                  }
-                ],
-                "combinator": "and"
-              }
-            }
-          ]
-        }
+        "fromEmail": "={{ $env.SMTP_USER || 'me' }}",
+        "toEmail": "={{ $json.toEmail }}",
+        "subject": "={{ $json.replySubject }}",
+        "emailFormat": "text",
+        "text": "={{ $json.draftReply }}",
+        "options": {}
       },
-      "id": "103",
-      "name": "Route by Action",
-      "type": "n8n-nodes-base.switch",
-      "typeVersion": 3,
+      "id": "9",
+      "name": "Send Reply via Email (SMTP)",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
       "position": [
-        700,
-        640
+        740,
+        600
       ]
     },
     {
       "parameters": {
         "chatId": "={{ $json.chatId }}",
         "messageId": "={{ $json.messageId }}",
-        "text": "={{ $json.originalText }}\n\n✅ *STATUS: Reply Approved & Dispatched via Gmail*\n⏰ _Processed at {{ $json.timestamp }}_"
+        "text": "={{ $json.originalText }}\n\n✅ *STATUS: Reply Approved & Dispatched via Gmail*\n📤 _Sent to: {{ $json.toEmail }}_\n⏰ _Processed at {{ $json.timestamp }}_"
       },
-      "id": "106",
+      "id": "10",
       "name": "Update Telegram Status (Sent)",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        1180,
-        560
-      ]
-    },
-    {
-      "parameters": {
-        "chatId": "={{ $json.chatId }}",
-        "messageId": "={{ $json.messageId }}",
-        "text": "={{ $json.originalText }}\n\n📁 *STATUS: Archived & Cleared from Inbox*\n⏰ _Processed at {{ $json.timestamp }}_"
-      },
-      "id": "107",
-      "name": "Update Telegram Status (Archived)",
-      "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
-      "position": [
-        1180,
-        720
+        1000,
+        600
       ]
     }
   ],
   "connections": {
-    "Manual Test Trigger": {
+    "Email Trigger (IMAP)": {
       "main": [
         [
           {
@@ -259,7 +191,7 @@
         ]
       ]
     },
-    "Gmail Trigger (New Unread Email)": {
+    "Manual Test Trigger": {
       "main": [
         [
           {
@@ -307,36 +239,29 @@
       "main": [
         [
           {
-            "node": "Parse Callback Action",
+            "node": "Parse Callback & Extract Draft",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Parse Callback Action": {
+    "Parse Callback & Extract Draft": {
       "main": [
         [
           {
-            "node": "Route by Action",
+            "node": "Send Reply via Email (SMTP)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Route by Action": {
+    "Send Reply via Email (SMTP)": {
       "main": [
         [
           {
             "node": "Update Telegram Status (Sent)",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Update Telegram Status (Archived)",
             "type": "main",
             "index": 0
           }
