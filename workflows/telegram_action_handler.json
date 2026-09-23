@@ -1,0 +1,217 @@
+{
+  "name": "Telegram Action Handler",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "callback_query"
+        ]
+      },
+      "id": "101",
+      "name": "Telegram Callback Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        220,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const query = $input.first().json.callback_query;\nconst data = query.data || '';\nconst parts = data.split(':');\nconst action = parts[0];\nconst threadId = parts.slice(1).join(':');\nconst messageId = query.message.message_id;\nconst chatId = query.message.chat.id;\nconst queryId = query.id;\n\nreturn [{\n  json: {\n    action,\n    threadId,\n    messageId,\n    chatId,\n    queryId,\n    originalText: query.message.text,\n    timestamp: new Date().toLocaleTimeString()\n  }\n}];"
+      },
+      "id": "102",
+      "name": "Parse Callback Action",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "send",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "arch",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        }
+      },
+      "id": "103",
+      "name": "Route by Action",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        700,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "reply",
+        "messageId": "={{ $json.threadId }}",
+        "message": "=Thank you for reaching out. I have received your request and am reviewing the details. I will follow up shortly.",
+        "options": {}
+      },
+      "id": "104",
+      "name": "Send Reply in Gmail",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        960,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "addLabels",
+        "messageId": "={{ $json.threadId }}",
+        "labelIds": []
+      },
+      "id": "105",
+      "name": "Archive / Mark Processed in Gmail",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        960,
+        440
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "messageId": "={{ $json.messageId }}",
+        "text": "={{ $json.originalText }}\\n\\n✅ *STATUS: Reply Approved & Dispatched via Gmail*\\n⏰ _Processed at {{ $json.timestamp }}_"
+      },
+      "id": "106",
+      "name": "Update Telegram Status (Sent)",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1200,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "messageId": "={{ $json.messageId }}",
+        "text": "={{ $json.originalText }}\\n\\n📁 *STATUS: Archived & Cleared from Inbox*\\n⏰ _Processed at {{ $json.timestamp }}_"
+      },
+      "id": "107",
+      "name": "Update Telegram Status (Archived)",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1200,
+        440
+      ]
+    }
+  ],
+  "connections": {
+    "Telegram Callback Trigger": {
+      "main": [
+        [
+          {
+            "node": "Parse Callback Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Callback Action": {
+      "main": [
+        [
+          {
+            "node": "Route by Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Action": {
+      "main": [
+        [
+          {
+            "node": "Send Reply in Gmail",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Archive / Mark Processed in Gmail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Reply in Gmail": {
+      "main": [
+        [
+          {
+            "node": "Update Telegram Status (Sent)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Archive / Mark Processed in Gmail": {
+      "main": [
+        [
+          {
+            "node": "Update Telegram Status (Archived)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
