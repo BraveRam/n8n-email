@@ -120,7 +120,7 @@
       "parameters": {
         "chatId": "={{ $json.chatId }}",
         "messageId": "={{ $json.messageId }}",
-        "text": "={{ $json.originalText }}\\n\\n✅ *STATUS: Reply Approved & Dispatched via Gmail*\\n⏰ _Processed at {{ $json.timestamp }}_"
+        "text": "={{ $json.originalText }}\n\n✅ *STATUS: Reply Approved & Dispatched via Gmail*\n⏰ _Processed at {{ $json.timestamp }}_"
       },
       "id": "106",
       "name": "Update Telegram Status (Sent)",
@@ -135,7 +135,7 @@
       "parameters": {
         "chatId": "={{ $json.chatId }}",
         "messageId": "={{ $json.messageId }}",
-        "text": "={{ $json.originalText }}\\n\\n📁 *STATUS: Archived & Cleared from Inbox*\\n⏰ _Processed at {{ $json.timestamp }}_"
+        "text": "={{ $json.originalText }}\n\n📁 *STATUS: Archived & Cleared from Inbox*\n⏰ _Processed at {{ $json.timestamp }}_"
       },
       "id": "107",
       "name": "Update Telegram Status (Archived)",
