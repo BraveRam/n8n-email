@@ -5,6 +5,8 @@ services:
     restart: unless-stopped
     ports:
       - "${N8N_PORT:-5678}:5678"
+    env_file:
+      - .env
     environment:
       - N8N_HOST=${N8N_HOST:-localhost}
       - N8N_PORT=5678
@@ -14,6 +16,7 @@ services:
       - EXECUTIONS_DATA_PRUNE=true
       - EXECUTIONS_DATA_MAX_AGE=168
       - N8N_METRICS=true
+      - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
     volumes:
       - n8n_data:/home/node/.n8n
       - ./workflows:/home/node/workflows:ro
