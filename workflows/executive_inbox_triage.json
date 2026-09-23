@@ -95,31 +95,31 @@
       "parameters": {
         "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
         "text": "={{ $json.telegramText }}",
-        "additionalFields": {
-          "parse_mode": "Markdown",
-          "reply_markup": "inline_keyboard",
-          "inline_keyboard": {
-            "rows": [
-              {
-                "row": {
-                  "buttons": [
-                    {
-                      "text": "🚀 Approve & Send Reply",
-                      "additionalFields": {
-                        "callback_data": "={{ $json.sendCallback }}"
-                      }
-                    },
-                    {
-                      "text": "📁 Archive",
-                      "additionalFields": {
-                        "callback_data": "={{ $json.archiveCallback }}"
-                      }
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "🚀 Approve & Send Reply",
+                    "additionalFields": {
+                      "callback_data": "={{ $json.sendCallback }}"
                     }
-                  ]
-                }
+                  },
+                  {
+                    "text": "📁 Archive",
+                    "additionalFields": {
+                      "callback_data": "={{ $json.archiveCallback }}"
+                    }
+                  }
+                ]
               }
-            ]
-          }
+            }
+          ]
+        },
+        "additionalFields": {
+          "parse_mode": "Markdown"
         }
       },
       "id": "6",
