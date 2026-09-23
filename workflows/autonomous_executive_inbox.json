@@ -166,9 +166,14 @@
     {
       "parameters": {
         "operation": "editMessageText",
+        "messageType": "message",
         "chatId": "={{ $('Parse Callback & Extract Draft').item.json.chatId }}",
         "messageId": "={{ $('Parse Callback & Extract Draft').item.json.messageId }}",
-        "text": "={{ $('Parse Callback & Extract Draft').item.json.originalText }}\n\n✅ *STATUS: Reply Approved & Dispatched via Gmail*\n📤 _Sent to: {{ $('Parse Callback & Extract Draft').item.json.toEmail }}_\n⏰ _Processed at {{ $('Parse Callback & Extract Draft').item.json.timestamp }}_"
+        "text": "={{ $('Parse Callback & Extract Draft').item.json.originalText }}\n\n✅ *STATUS: Reply Approved & Dispatched via Gmail*\n📤 _Sent to: {{ $('Parse Callback & Extract Draft').item.json.toEmail }}_\n⏰ _Processed at {{ $('Parse Callback & Extract Draft').item.json.timestamp }}_",
+        "replyMarkup": "none",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
       },
       "id": "10",
       "name": "Update Telegram Status (Sent)",
