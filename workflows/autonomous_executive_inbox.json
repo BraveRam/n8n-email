@@ -1,0 +1,350 @@
+{
+  "name": "Autonomous Executive Inbox & Action Hub",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "1",
+      "name": "Manual Test Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        220,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "filters": {
+          "q": "is:unread -category:promotions -category:social"
+        }
+      },
+      "id": "2",
+      "name": "Gmail Trigger (New Unread Email)",
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1,
+      "disabled": true,
+      "position": [
+        220,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normalizes incoming email payload from either Gmail Trigger or Manual Test\nconst item = $input.first().json;\n\n// Sample fallback data if testing manually\nconst from = item.from || item.sender || \"John Doe <john.doe@clientcorp.io>\";\nconst subject = item.subject || \"Urgent: Project Scope Update & Next Steps\";\nconst threadId = item.threadId || item.id || \"thread_sample_12345\";\nlet snippet = item.snippet || item.text || item.body || \"Hi Lencho, we loved the automation demo you shared. We would like to expand the scope to include automated invoice reconciliation. Could you let us know your availability for a call this Thursday at 2 PM UTC to finalize the contract?\";\n\n// Clean and truncate body if needed (protect token budget)\nconst cleanBody = snippet.replace(/<[^>]*>?/gm, '').slice(0, 3000);\n\nreturn [{\n  json: {\n    from,\n    subject,\n    threadId,\n    body: cleanBody,\n    receivedAt: item.date || new Date().toISOString()\n  }\n}];"
+      },
+      "id": "3",
+      "name": "Pre-process & Sanitize Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://ai-gateway.vercel.sh/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.VERCEL_AI_GATEWAY_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"{{ $env.DEFAULT_AI_MODEL || 'xiaomi/mimo-v2.6-flash' }}\",\n  \"response_format\": { \"type\": \"json_object\" },\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are an elite executive email assistant for Lencho, an AI automation engineer. Analyze incoming emails, categorize intent, assess urgency (1-5), summarize concisely, and generate a polite, professional draft reply. Respond strictly in valid JSON with keys: category (one of: 'Client / Opportunity', 'Urgent Inquiry', 'Administrative', 'Newsletter / Noise'), urgency_score (1 to 5), summary (2 sentences max), action_needed (string), draft_reply (ready to send email response).\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Email From: {{ $json.from }}\\nSubject: {{ $json.subject }}\\nBody: {{ $json.body }}\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "4",
+      "name": "Vercel AI Gateway (Triage & Draft)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        700,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst emailMeta = $(\"Pre-process & Sanitize Email\").first().json;\n\nlet aiOutput = {};\ntry {\n  const content = response.choices[0].message.content;\n  aiOutput = typeof content === 'string' ? JSON.parse(content) : content;\n} catch (err) {\n  aiOutput = {\n    category: 'Urgent Inquiry',\n    urgency_score: 3,\n    summary: 'Could not parse JSON response from AI Gateway.',\n    action_needed: 'Check email manually.',\n    draft_reply: 'Hi, thank you for reaching out. I received your message and will get back to you shortly.'\n  };\n}\n\n// Determine emoji badge based on urgency\nconst urgencyBadge = '⚡'.repeat(Math.min(aiOutput.urgency_score || 1, 5));\n\n// Format telegram markdown message\nconst telegramText = `📬 *New Inbound Email Analyzed*\\n` +\n`*From:* \\`${emailMeta.from}\\`\\n` +\n`*Subject:* *${emailMeta.subject}*\\n` +\n`*Category:* ${aiOutput.category} (${urgencyBadge})\\n\\n` +\n`📋 *Executive Summary:*\\n${aiOutput.summary}\\n\\n` +\n`🎯 *Action Needed:*\\n${aiOutput.action_needed}\\n\\n` +\n`✍️ *Suggested Draft Reply:*\\n\\\"_${aiOutput.draft_reply}_\\\"`;\n\nreturn [{\n  json: {\n    ...emailMeta,\n    ai: aiOutput,\n    telegramText,\n    sendCallback: `send:${emailMeta.threadId.slice(0, 40)}`,\n    archiveCallback: `arch:${emailMeta.threadId.slice(0, 40)}`\n  }\n}];"
+      },
+      "id": "5",
+      "name": "Format Telegram Notification",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        940,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "={{ $json.telegramText }}",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "🚀 Approve & Send Reply",
+                    "additionalFields": {
+                      "callback_data": "={{ $json.sendCallback }}"
+                    }
+                  },
+                  {
+                    "text": "📁 Archive",
+                    "additionalFields": {
+                      "callback_data": "={{ $json.archiveCallback }}"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "6",
+      "name": "Send Telegram Interactive Alert",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1180,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "updates": [
+          "callback_query"
+        ]
+      },
+      "id": "101",
+      "name": "Telegram Callback Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        220,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const query = $input.first().json.callback_query;\nconst data = query.data || '';\nconst parts = data.split(':');\nconst action = parts[0];\nconst threadId = parts.slice(1).join(':');\nconst messageId = query.message.message_id;\nconst chatId = query.message.chat.id;\nconst queryId = query.id;\n\nreturn [{\n  json: {\n    action,\n    threadId,\n    messageId,\n    chatId,\n    queryId,\n    originalText: query.message.text,\n    timestamp: new Date().toLocaleTimeString()\n  }\n}];"
+      },
+      "id": "102",
+      "name": "Parse Callback Action",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "send",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "arch",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        }
+      },
+      "id": "103",
+      "name": "Route by Action",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        700,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "messageId": "={{ $json.messageId }}",
+        "text": "={{ $json.originalText }}\n\n✅ *STATUS: Reply Approved & Dispatched via Gmail*\n⏰ _Processed at {{ $json.timestamp }}_"
+      },
+      "id": "106",
+      "name": "Update Telegram Status (Sent)",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1180,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "messageId": "={{ $json.messageId }}",
+        "text": "={{ $json.originalText }}\n\n📁 *STATUS: Archived & Cleared from Inbox*\n⏰ _Processed at {{ $json.timestamp }}_"
+      },
+      "id": "107",
+      "name": "Update Telegram Status (Archived)",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1180,
+        720
+      ]
+    }
+  ],
+  "connections": {
+    "Manual Test Trigger": {
+      "main": [
+        [
+          {
+            "node": "Pre-process & Sanitize Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail Trigger (New Unread Email)": {
+      "main": [
+        [
+          {
+            "node": "Pre-process & Sanitize Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pre-process & Sanitize Email": {
+      "main": [
+        [
+          {
+            "node": "Vercel AI Gateway (Triage & Draft)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vercel AI Gateway (Triage & Draft)": {
+      "main": [
+        [
+          {
+            "node": "Format Telegram Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Telegram Notification": {
+      "main": [
+        [
+          {
+            "node": "Send Telegram Interactive Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram Callback Trigger": {
+      "main": [
+        [
+          {
+            "node": "Parse Callback Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Callback Action": {
+      "main": [
+        [
+          {
+            "node": "Route by Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Action": {
+      "main": [
+        [
+          {
+            "node": "Update Telegram Status (Sent)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update Telegram Status (Archived)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
